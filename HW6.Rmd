@@ -1,0 +1,136 @@
+---
+title: "HW6"
+author: "My An Huynh"
+date: "2024-11-19"
+output: github_document
+---
+
+```{r}
+library(tidyverse)
+library(p8105.datasets)
+library(modelr)
+library(mgcv)
+library(SemiPar)
+```
+
+## Problem 1
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
+
+## Problem 2
+```{r data wrangling}
+homicide_df =
+  read_csv("data/homicide-data.csv") |> 
+  mutate(
+    city_state = paste(city, state, sep = ", "),
+    solved_bin = ifelse(disposition == "Closed by arrest", 1, 0),
+    victim_age = as.numeric(victim_age)
+  ) |>
+  filter(
+    !(city_state %in% c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO", "Tulsa, AL")),
+    victim_race %in% c("White", "Black")
+  ) |> 
+  select(-city, -state)
+
+
+```
+
+Glm for Baltimore, MD
+```{r}
+baltimore = 
+  homicide_df |> 
+  filter(
+    city_state == "Baltimore, MD"
+  ) 
+
+baltimore_glm = 
+  glm(solved_bin ~ victim_age + victim_race + victim_sex, data = baltimore, family = binomial()) |> 
+  broom::tidy() |> 
+  filter(
+    term == "victim_sexMale"
+  ) |> 
+  mutate(
+    odds_ratio = exp(estimate),
+    conf_upper_95 = exp(estimate + 1.96 * std.error),
+    conf_lower_95 = exp(estimate - 1.96 * std.error)
+  )
+```
+
+Do this for every city 
+
+```{r}
+glm_function = function(df) {
+  df = 
+    glm(solved_bin ~ victim_age + victim_race + victim_sex, data = df, family = binomial()) |> 
+    broom::tidy() |> 
+    filter(
+      term == "victim_sexMale"
+    ) |> 
+    mutate(
+      odds_ratio = exp(estimate),
+      conf_upper_95 = exp(estimate + 1.96 * std.error),
+      conf_lower_95 = exp(estimate - 1.96 * std.error)
+    )
+}
+
+homicide_glm = 
+  homicide_df |> 
+  select(city_state, solved_bin, victim_sex, victim_age, victim_race) |>
+  nest(data = solved_bin:victim_race) |> 
+  mutate(
+    glm_results = map(data, glm_function)
+  ) |> 
+  unnest(glm_results) |> 
+  select(city_state, odds_ratio, conf_lower_95, conf_upper_95)
+
+homicide_plot = 
+  homicide_glm |> 
+  ggplot(aes(x = reorder(city_state, odds_ratio), y = odds_ratio)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf_lower_95, ymax = conf_upper_95)) 
+
+print(homicide_plot)
+```
+
+## Problem 3
+```{r}
+birthweight_df = 
+  read_csv("data/birthweight.csv") |> 
+  mutate(
+    babysex = as.factor(babysex),
+    frace = as.factor(frace),
+    malform = as.factor(malform),
+    mrace = as.factor(mrace)
+  )
+
+str(birthweight_df)
+```
+
+
+```{r}
+linear_model = lm(bwt ~ bhead + blength + gaweeks + momage + ppbmi + ppwt + smoken + wtgain, data = birthweight_df)
+
+```
+
+```{r}
+bwt_plot = 
+  birthweight_df |> 
+  add_predictions(linear_model) |> 
+  ggplot(aes(x = bhead, y = bwt)) +
+  geom_point() +
+  geom_line(aes(y = pred))
+
+print(bwt_plot)
+```
+
