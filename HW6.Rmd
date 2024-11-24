@@ -11,6 +11,7 @@ library(p8105.datasets)
 library(modelr)
 library(mgcv)
 library(SemiPar)
+library(glmnet)
 ```
 
 ## Problem 1
@@ -105,32 +106,71 @@ print(homicide_plot)
 
 ## Problem 3
 ```{r}
-birthweight_df = 
+bwt_df = 
   read_csv("data/birthweight.csv") |> 
+  janitor::clean_names() |>
   mutate(
     babysex = as.factor(babysex),
+    babysex = fct_recode(babysex, "male" = "1", "female" = "2"),
     frace = as.factor(frace),
-    malform = as.factor(malform),
-    mrace = as.factor(mrace)
-  )
-
-str(birthweight_df)
+    frace = fct_recode(
+      frace, "white" = "1", "black" = "2", "asian" = "3", 
+      "puerto rican" = "4", "other" = "8"),
+    malform = as.logical(malform),
+    mrace = as.factor(mrace),
+    mrace = fct_recode(
+      mrace, "white" = "1", "black" = "2", "asian" = "3", 
+      "puerto rican" = "4"))
 ```
+My hypothesis is that biological factors are more likely to underly birthweight, specifically `babysex`, `bhead`, `blength`, `gaweeks`, `malform`, `menarche`, `frace`, `mrace`, `ppbmi`, `ppwt`, `smoken`.
 
-
+I will first fit MLR with these variables as predictors.
 ```{r}
-linear_model = lm(bwt ~ bhead + blength + gaweeks + momage + ppbmi + ppwt + smoken + wtgain, data = birthweight_df)
+linear_model = lm(bwt ~ babysex + bhead + blength + gaweeks + malform + menarche + frace + mrace + ppbmi + ppwt + smoken, data = bwt_df)
+summary(linear_model)
+```
+
+Diagnostics for MLR:
+```{r}
+cor(bwt_df[, c("bhead", "blength", "gaweeks", "menarche", "ppbmi", "ppwt", "smoken")])
+
+library(car)
+vif(linear_model)
+crPlots(linear_model)
 
 ```
+
+I used the function `cor` to check for pairwise collinearity between numeric predictors. I found that there are no instances where correlation is larger than 0.8 or smaller than -0.8, which is typically the threshold to determine pairwise collinearity. However, the correlation for `blength` and `bhead` is approximately 0.63, which is not high enough to meet the threshold but worth mentioning. 
+
+I also used `vif` to calculate VIFs for all predictors, including factor and logical variables (`mrace`, `frace`, `malform`). I found that VIFs for `frace` and `mrace` are 475 and 480, respectively.
+
+I will fit another MLR keeping these findings in mind. 
+```{r}
+linear_model = lm(bwt ~ bhead * blength * gaweeks * menarche * ppbmi * ppwt * smoken * mrace * frace, data = bwt_df)
+summary(linear_model)
+```
+
 
 ```{r}
 bwt_plot = 
-  birthweight_df |> 
+  bwt_df |> 
   add_predictions(linear_model) |> 
-  ggplot(aes(x = bhead, y = bwt)) +
+  add_residuals(linear_model) |> 
+  ggplot(aes(x = pred, y = resid)) +
   geom_point() +
-  geom_line(aes(y = pred))
+  geom_smooth(method = "lm", se = FALSE,  color = "red")
 
 print(bwt_plot)
+
+```
+
+Compare with other models 
+ 
+```{r}
+model1 = lm(bwt ~ blength + gaweeks, data = birthweight_df)
+summary(model1)
+model2 = lm(bwt ~ bhead * blength * babysex, data = birthweight_df)
+summary(model2)
+
 ```
 
