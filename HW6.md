@@ -36,26 +36,16 @@ library(mgcv)
 
 ``` r
 library(SemiPar)
-library(glmnet)
-```
-
-    ## Loading required package: Matrix
-    ## 
-    ## Attaching package: 'Matrix'
-    ## 
-    ## The following objects are masked from 'package:tidyr':
-    ## 
-    ##     expand, pack, unpack
-    ## 
-    ## Loaded glmnet 4.1-8
-
-``` r
 library(GGally)
 ```
 
     ## Registered S3 method overwritten by 'GGally':
     ##   method from   
     ##   +.gg   ggplot2
+
+``` r
+set.seed(1)
+```
 
 ## Problem 1
 
@@ -78,6 +68,109 @@ weather_df =
     ## date created (size, mb): 2024-09-26 14:18:13.607687 (8.651)
 
     ## file min/max dates: 1869-01-01 / 2024-09-30
+
+We’ll focus on a simple linear regression with tmax as the response and
+tmin as the predictor, and are interested in the distribution of two
+quantities estimated from these data:
+
+𝑟̂ 2 log(𝛽̂ 0∗𝛽̂ 1) Use 5000 bootstrap samples and, for each bootstrap
+sample, produce estimates of these two quantities. Plot the distribution
+of your estimates, and describe these in words. Using the 5000 bootstrap
+estimates, identify the 2.5% and 97.5% quantiles to provide a 95%
+confidence interval for 𝑟̂ 2 and log(𝛽̂ 0∗𝛽̂ 1) . Note: broom::glance() is
+helpful for extracting 𝑟̂ 2 from a fitted regression, and broom::tidy()
+(with some additional wrangling) should help in computing log(𝛽̂ 0∗𝛽̂ 1) .
+
+``` r
+set.seed(1)
+
+bootstrap_results =
+  weather_df |> 
+  modelr::bootstrap(n = 5000) |> 
+  mutate(
+    models = map(strap, \(x) lm(tmax ~ tmin, data = x)),
+    results = map(models, broom::tidy),
+    r_squared = map(models, broom::glance)
+  ) |> 
+  unnest(results) |> 
+  select(term, estimate, r_squared) |> 
+  pivot_wider(
+    names_from = term,
+    values_from = estimate
+  ) |> 
+  rename(
+    beta_1 = tmin,
+    beta_0 = `(Intercept)`
+  ) |> 
+   mutate(
+    log_beta_product = log(beta_0 * beta_1)
+  ) |> 
+  unnest(r_squared) |> 
+  select(log_beta_product, adj.r.squared)
+```
+
+Plot the distribution of these two quantities.
+
+``` r
+r_squared_dist = 
+  bootstrap_results |> 
+  ggplot(aes(x = adj.r.squared)) +
+  geom_density() +
+  labs(
+    title = "Distribution of adjusted R-squared",
+    x = "Adjusted R_squared",
+    y = "Density"
+  )
+
+print(r_squared_dist)
+```
+
+![](HW6_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+
+``` r
+log_beta_product = 
+  bootstrap_results |> 
+  ggplot(aes(x = log_beta_product)) +
+  geom_density() +
+  labs(
+    title = "Distribution of log beta products",
+    x = "Log (Beta_0 * Beta_1)",
+    y = "Density"
+  )
+
+print(log_beta_product)
+```
+
+![](HW6_files/figure-gfm/unnamed-chunk-4-2.png)<!-- -->
+
+The distributions of these quantities follow normal distribution.
+
+Compute a 95% confidence interval for these two quantities.
+
+``` r
+quantiles = 
+  bootstrap_results |> 
+  summarize(
+    r2_0.025 = quantile(adj.r.squared, probs = 0.025),
+    r2_0.975 = quantile(adj.r.squared, probs = 0.975),
+    log_beta_0.025 = quantile(log_beta_product, probs = 0.025),
+    log_beta_0.975 = quantile(log_beta_product, probs = 0.975),
+  ) |> 
+  mutate(
+    r_squared_CI = str_c("(", round(r2_0.025, 3), ",", " ", round(r2_0.975, 3), ")"),
+    log_beta_product_CI = str_c("(", round(log_beta_0.025, 3), ",", " ", round(log_beta_0.975, 3), ")")
+  ) |> 
+  select(r_squared_CI, log_beta_product_CI) |> 
+  knitr::kable()
+
+print(quantiles)
+```
+
+    ## 
+    ## 
+    ## |r_squared_CI   |log_beta_product_CI |
+    ## |:--------------|:-------------------|
+    ## |(0.893, 0.927) |(1.965, 2.059)      |
 
 ## Problem 2
 
@@ -168,7 +261,7 @@ homicide_plot =
 print(homicide_plot)
 ```
 
-![](HW6_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
+![](HW6_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
 
 ## Problem 3
 
@@ -296,7 +389,7 @@ the continuous variables in my model.
 ggpairs(bwt_df[, c("bhead", "blength", "smoken", "gaweeks")])
 ```
 
-![](HW6_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+![](HW6_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
 
 Results from ggpairs suggest that `blength` has a moderate linear
 relationship with `bhead` (corr = 0.630), `gaweeks` has a moderately
@@ -384,7 +477,7 @@ print(bwt_plot)
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-![](HW6_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
+![](HW6_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
 
 The residual aginst prediction plot shows that there is an overall
 random scatter pattern, but the model does a better job at explaining
@@ -493,18 +586,28 @@ cv_results_df =
     rmse_my_model = map2_dbl(my_model, test, rmse),
     rmse_model1 = map2_dbl(model1, test, rmse),
     rmse_model2 = map2_dbl(model2, test, rmse)
-  )
- 
-head(cv_results_df) 
+  ) |> 
+  select(rmse_my_model, rmse_model1, rmse_model2)
 ```
 
-    ## # A tibble: 6 × 9
-    ##   train    test     .id   my_model model1 model2 rmse_my_model rmse_model1
-    ##   <list>   <list>   <chr> <list>   <list> <list>         <dbl>       <dbl>
-    ## 1 <tibble> <tibble> 001   <lm>     <lm>   <lm>            266.        321.
-    ## 2 <tibble> <tibble> 002   <lm>     <lm>   <lm>            283.        333.
-    ## 3 <tibble> <tibble> 003   <lm>     <lm>   <lm>            284.        334.
-    ## 4 <tibble> <tibble> 004   <lm>     <lm>   <lm>            271.        333.
-    ## 5 <tibble> <tibble> 005   <lm>     <lm>   <lm>            276.        327.
-    ## 6 <tibble> <tibble> 006   <lm>     <lm>   <lm>            295.        351.
-    ## # ℹ 1 more variable: rmse_model2 <dbl>
+Compare RMSE for three models.
+
+``` r
+cv_results_df |> 
+  select(starts_with("rmse")) |> 
+  pivot_longer(
+    everything(),
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = ("rmse_")
+  ) |> 
+  ggplot(aes(x = model, y = rmse)) +
+  geom_violin() +
+  labs(
+    title = "RMSE for 3 models", 
+    x = "Model",
+    y = "RMSE"
+  )
+```
+
+![](HW6_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->

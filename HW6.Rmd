@@ -11,8 +11,8 @@ library(p8105.datasets)
 library(modelr)
 library(mgcv)
 library(SemiPar)
-library(glmnet)
 library(GGally)
+set.seed(1)
 ```
 
 ## Problem 1
@@ -30,8 +30,93 @@ weather_df =
   select(name, id, everything())
 ```
 
-```{r}
+We’ll focus on a simple linear regression with tmax as the response and tmin as the predictor, and are interested in the distribution of two quantities estimated from these data:
 
+𝑟̂ 2
+log(𝛽̂ 0∗𝛽̂ 1)
+Use 5000 bootstrap samples and, for each bootstrap sample, produce estimates of these two quantities. Plot the distribution of your estimates, and describe these in words. Using the 5000 bootstrap estimates, identify the 2.5% and 97.5% quantiles to provide a 95% confidence interval for 𝑟̂ 2
+ and log(𝛽̂ 0∗𝛽̂ 1)
+. Note: broom::glance() is helpful for extracting 𝑟̂ 2
+ from a fitted regression, and broom::tidy() (with some additional wrangling) should help in computing log(𝛽̂ 0∗𝛽̂ 1)
+.
+
+
+```{r}
+set.seed(1)
+
+bootstrap_results =
+  weather_df |> 
+  modelr::bootstrap(n = 5000) |> 
+  mutate(
+    models = map(strap, \(x) lm(tmax ~ tmin, data = x)),
+    results = map(models, broom::tidy),
+    r_squared = map(models, broom::glance)
+  ) |> 
+  unnest(results) |> 
+  select(term, estimate, r_squared) |> 
+  pivot_wider(
+    names_from = term,
+    values_from = estimate
+  ) |> 
+  rename(
+    beta_1 = tmin,
+    beta_0 = `(Intercept)`
+  ) |> 
+   mutate(
+    log_beta_product = log(beta_0 * beta_1)
+  ) |> 
+  unnest(r_squared) |> 
+  select(log_beta_product, adj.r.squared)
+```
+
+Plot the distribution of these two quantities. 
+```{r}
+r_squared_dist = 
+  bootstrap_results |> 
+  ggplot(aes(x = adj.r.squared)) +
+  geom_density() +
+  labs(
+    title = "Distribution of adjusted R-squared",
+    x = "Adjusted R_squared",
+    y = "Density"
+  )
+
+print(r_squared_dist)
+
+
+log_beta_product = 
+  bootstrap_results |> 
+  ggplot(aes(x = log_beta_product)) +
+  geom_density() +
+  labs(
+    title = "Distribution of log beta products",
+    x = "Log (Beta_0 * Beta_1)",
+    y = "Density"
+  )
+
+print(log_beta_product)
+```
+
+The distributions of these quantities follow normal distribution. 
+
+Compute a 95% confidence interval for these two quantities. 
+```{r}
+quantiles = 
+  bootstrap_results |> 
+  summarize(
+    r2_0.025 = quantile(adj.r.squared, probs = 0.025),
+    r2_0.975 = quantile(adj.r.squared, probs = 0.975),
+    log_beta_0.025 = quantile(log_beta_product, probs = 0.025),
+    log_beta_0.975 = quantile(log_beta_product, probs = 0.975),
+  ) |> 
+  mutate(
+    r_squared_CI = str_c("(", round(r2_0.025, 3), ",", " ", round(r2_0.975, 3), ")"),
+    log_beta_product_CI = str_c("(", round(log_beta_0.025, 3), ",", " ", round(log_beta_0.975, 3), ")")
+  ) |> 
+  select(r_squared_CI, log_beta_product_CI) |> 
+  knitr::kable()
+
+print(quantiles)
 ```
 
 ## Problem 2
@@ -48,8 +133,6 @@ homicide_df =
     victim_race %in% c("White", "Black")
   ) |> 
   select(-city, -state)
-
-
 ```
 
 Glm for Baltimore, MD
@@ -223,7 +306,25 @@ cv_results_df =
     rmse_model2 = map2_dbl(model2, test, rmse)
   ) |> 
   select(rmse_my_model, rmse_model1, rmse_model2)
- 
-head(cv_results_df) 
+
+```
+
+Compare RMSE for three models.
+```{r}
+cv_results_df |> 
+  select(starts_with("rmse")) |> 
+  pivot_longer(
+    everything(),
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = ("rmse_")
+  ) |> 
+  ggplot(aes(x = model, y = rmse)) +
+  geom_violin() +
+  labs(
+    title = "RMSE for 3 models", 
+    x = "Model",
+    y = "RMSE"
+  )
 ```
 
