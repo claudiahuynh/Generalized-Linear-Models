@@ -12,6 +12,7 @@ library(modelr)
 library(mgcv)
 library(SemiPar)
 library(glmnet)
+library(GGally)
 ```
 
 ## Problem 1
@@ -27,6 +28,10 @@ weather_df =
     tmin = tmin / 10,
     tmax = tmax / 10) %>%
   select(name, id, everything())
+```
+
+```{r}
+
 ```
 
 ## Problem 2
@@ -122,55 +127,103 @@ bwt_df =
       mrace, "white" = "1", "black" = "2", "asian" = "3", 
       "puerto rican" = "4"))
 ```
-My hypothesis is that biological factors are more likely to underly birthweight, specifically `babysex`, `bhead`, `blength`, `gaweeks`, `malform`, `menarche`, `frace`, `mrace`, `ppbmi`, `ppwt`, `smoken`.
+From a biological standpoint, I hypothesize that the following factors are more likely to underly birthweight: `babysex`, `bhead`, `blength`, `gaweeks`, `malform`, `smoken`. From a socioeconomical standpoint, I hypothesize that `frace` and `mrace` may also influence birthweight, because poverty, education, and employment tend to vary across different racial and ethnic groups.
 
+#### Create my own model
 I will first fit MLR with these variables as predictors.
 ```{r}
-linear_model = lm(bwt ~ babysex + bhead + blength + gaweeks + malform + menarche + frace + mrace + ppbmi + ppwt + smoken, data = bwt_df)
+linear_model = lm(bwt ~ babysex + bhead + blength + gaweeks + malform + smoken + mrace + frace, data = bwt_df)
 summary(linear_model)
 ```
 
-Diagnostics for MLR:
+The results suggest that all covariates are significant predictors of birthweight except for `frace` and `malform`. The adjusted R-squared for this model is 0.7049. I will proceed with refitting the model without these covariates.
+
 ```{r}
-cor(bwt_df[, c("bhead", "blength", "gaweeks", "menarche", "ppbmi", "ppwt", "smoken")])
+refitted_linear_model = lm(bwt ~ babysex + bhead + blength + gaweeks + smoken + mrace, data = bwt_df) 
 
-library(car)
-vif(linear_model)
-crPlots(linear_model)
+summary(refitted_linear_model)
+```
+The refitted model now shows an adjusted R-squared of 0.7051. This suggests that the refitted model does a slightly better job at explaining the variation in birthweight compared to the original model. 
 
+I am also interested in looking at interactions between different covariates. I will use `ggpairs` to look at multicollinearity between the continuous variables in my model. 
+
+```{r}
+ggpairs(bwt_df[, c("bhead", "blength", "smoken", "gaweeks")])
 ```
 
-I used the function `cor` to check for pairwise collinearity between numeric predictors. I found that there are no instances where correlation is larger than 0.8 or smaller than -0.8, which is typically the threshold to determine pairwise collinearity. However, the correlation for `blength` and `bhead` is approximately 0.63, which is not high enough to meet the threshold but worth mentioning. 
+Results from ggpairs suggest that `blength` has a moderate linear relationship with `bhead` (corr = 0.630), `gaweeks` has a moderately weak relationship with `blength` (corr = 0.359) and `bhead` (corr = 0.378). I will fit another model that includes the three-way interaction between these covariates. 
 
-I also used `vif` to calculate VIFs for all predictors, including factor and logical variables (`mrace`, `frace`, `malform`). I found that VIFs for `frace` and `mrace` are 475 and 480, respectively.
 
-I will fit another MLR keeping these findings in mind. 
 ```{r}
-linear_model = lm(bwt ~ bhead * blength * gaweeks * menarche * ppbmi * ppwt * smoken * mrace * frace, data = bwt_df)
-summary(linear_model)
+interaction_model = lm(bwt ~ babysex + bhead * blength * gaweeks + smoken + mrace, data = bwt_df)
+summary(interaction_model)
+
+AIC(interaction_model)
+AIC(refitted_linear_model)
 ```
 
+Results from interaction model suggest that all covariates are significant predictors of birthweight, and that the interactions between `gaweek`, `bhead` and `blength` are also significant (p-values are all lower than 0.05). The adjusted R-squared for this model is 0.7072, which suggests that this model is slightly better than the refitted linear model without interaction terms. 
 
+I also investigated AIC values to evaluate goodness-of-fit of these two models, and found that the AIC value for the interaction model is slightly lower than that for the refitted linear model. Based on adjusted R-squared and AIC value, the interaction model will be my final model. 
+
+The plot showing predictions against residuals is as follows:
 ```{r}
 bwt_plot = 
   bwt_df |> 
-  add_predictions(linear_model) |> 
-  add_residuals(linear_model) |> 
+  add_predictions(interaction_model) |> 
+  add_residuals(interaction_model) |> 
   ggplot(aes(x = pred, y = resid)) +
   geom_point() +
-  geom_smooth(method = "lm", se = FALSE,  color = "red")
+  geom_smooth(method = "lm", se = FALSE,  color = "red") +
+  labs(
+    title = "Residuals vs. Predicted Birth Weight", x = "Predicted Birth Weight", y = "Residuals"
+  )
 
 print(bwt_plot)
-
 ```
 
-Compare with other models 
+The residual aginst prediction plot shows that there is an overall random scatter pattern, but the model does a better job at explaining variation in birth weight for birth weight values ranging from 2500 to 3500 grams, which is the typical birth weight for newborn babies. There are a few extreme data points around the range 500 to 1500, but this makes biological sense due to factors such as premature birth or maternal health conditions. 
+
+#### Compare this model with other models. 
+
+The first model, named `model1`, fits a MLR of `bwt` against `blength` and `gaweeks` as predictors. The second model, named `model2`, fits a MLR of `bwt` against `bhead`, `blength` and `babysex` including their three-way interaction. 
  
 ```{r}
-model1 = lm(bwt ~ blength + gaweeks, data = birthweight_df)
+model1 = lm(bwt ~ blength + gaweeks, data = bwt_df)
 summary(model1)
-model2 = lm(bwt ~ bhead * blength * babysex, data = birthweight_df)
-summary(model2)
 
+model2 = lm(bwt ~ bhead * blength * babysex, data = bwt_df)
+summary(model2)
+```
+
+Model 1 results show that both variables `blength` and `gaweeks` are significant predictors of birthweight, with both p-values being less than 2e-16. 
+
+Model 2 results show that `bhead`, `blength` and `babysex` are all significant predictors of `bwt`. Based on interaction terms, those terms involving sex (`babysexfemale`) and the main predictors (`bhead`, `blength`) suggest that the effects of these variables on birthweight differ between male and female babies. Specifically, the three-way interaction (bhead:blength:babysexfemale) suggests that the effect of both head circumference and length at birth on birthweight is further modified by the baby's sex. This indicates that the relationship between `bwt` and main predictors `bhead` and `blength` are not the same for male and female babies. 
+
+I will use `crossv_mc` to make comparisons between my model and the other models in terms of cross-validated prediction error. 
+
+```{r}
+cv_df = 
+  crossv_mc(bwt_df, 100) |> 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+  )
+
+cv_results_df = 
+  cv_df |> 
+  mutate(
+    my_model = map(train, \(x) lm(bwt ~ babysex + bhead * blength * gaweeks + smoken + mrace, data = x)),
+    model1 = map(train, \(x) lm(bwt ~ blength + gaweeks, data = x)), 
+    model2 = map(train, \(x) lm(bwt ~ bhead * blength * babysex, data = x))
+  ) |> 
+  mutate(
+    rmse_my_model = map2_dbl(my_model, test, rmse),
+    rmse_model1 = map2_dbl(model1, test, rmse),
+    rmse_model2 = map2_dbl(model2, test, rmse)
+  ) |> 
+  select(rmse_my_model, rmse_model1, rmse_model2)
+ 
+head(cv_results_df) 
 ```
 

@@ -36,7 +36,26 @@ library(mgcv)
 
 ``` r
 library(SemiPar)
+library(glmnet)
 ```
+
+    ## Loading required package: Matrix
+    ## 
+    ## Attaching package: 'Matrix'
+    ## 
+    ## The following objects are masked from 'package:tidyr':
+    ## 
+    ##     expand, pack, unpack
+    ## 
+    ## Loaded glmnet 4.1-8
+
+``` r
+library(GGally)
+```
+
+    ## Registered S3 method overwritten by 'GGally':
+    ##   method from   
+    ##   +.gg   ggplot2
 
 ## Problem 1
 
@@ -149,19 +168,26 @@ homicide_plot =
 print(homicide_plot)
 ```
 
-![](HW6_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+![](HW6_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
 
 ## Problem 3
 
 ``` r
-birthweight_df = 
+bwt_df = 
   read_csv("data/birthweight.csv") |> 
+  janitor::clean_names() |>
   mutate(
     babysex = as.factor(babysex),
+    babysex = fct_recode(babysex, "male" = "1", "female" = "2"),
     frace = as.factor(frace),
-    malform = as.factor(malform),
-    mrace = as.factor(mrace)
-  )
+    frace = fct_recode(
+      frace, "white" = "1", "black" = "2", "asian" = "3", 
+      "puerto rican" = "4", "other" = "8"),
+    malform = as.logical(malform),
+    mrace = as.factor(mrace),
+    mrace = fct_recode(
+      mrace, "white" = "1", "black" = "2", "asian" = "3", 
+      "puerto rican" = "4"))
 ```
 
     ## Rows: 4342 Columns: 20
@@ -172,45 +198,313 @@ birthweight_df =
     ## ℹ Use `spec()` to retrieve the full column specification for this data.
     ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
 
-``` r
-str(birthweight_df)
-```
+From a biological standpoint, I hypothesize that the following factors
+are more likely to underly birthweight: `babysex`, `bhead`, `blength`,
+`gaweeks`, `malform`, `smoken`. From a socioeconomical standpoint, I
+hypothesize that `frace` and `mrace` may also influence birthweight,
+because poverty, education, and employment tend to vary across different
+racial and ethnic groups.
 
-    ## tibble [4,342 × 20] (S3: tbl_df/tbl/data.frame)
-    ##  $ babysex : Factor w/ 2 levels "1","2": 2 1 2 1 2 1 2 2 1 1 ...
-    ##  $ bhead   : num [1:4342] 34 34 36 34 34 33 33 33 36 33 ...
-    ##  $ blength : num [1:4342] 51 48 50 52 52 52 46 49 52 50 ...
-    ##  $ bwt     : num [1:4342] 3629 3062 3345 3062 3374 ...
-    ##  $ delwt   : num [1:4342] 177 156 148 157 156 129 126 140 146 169 ...
-    ##  $ fincome : num [1:4342] 35 65 85 55 5 55 96 5 85 75 ...
-    ##  $ frace   : Factor w/ 5 levels "1","2","3","4",..: 1 2 1 1 1 1 2 1 1 2 ...
-    ##  $ gaweeks : num [1:4342] 39.9 25.9 39.9 40 41.6 ...
-    ##  $ malform : Factor w/ 2 levels "0","1": 1 1 1 1 1 1 1 1 1 1 ...
-    ##  $ menarche: num [1:4342] 13 14 12 14 13 12 14 12 11 12 ...
-    ##  $ mheight : num [1:4342] 63 65 64 64 66 66 72 62 61 64 ...
-    ##  $ momage  : num [1:4342] 36 25 29 18 20 23 29 19 13 19 ...
-    ##  $ mrace   : Factor w/ 4 levels "1","2","3","4": 1 2 1 1 1 1 2 1 1 2 ...
-    ##  $ parity  : num [1:4342] 3 0 0 0 0 0 0 0 0 0 ...
-    ##  $ pnumlbw : num [1:4342] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ pnumsga : num [1:4342] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ ppbmi   : num [1:4342] 26.3 21.3 23.6 21.8 21 ...
-    ##  $ ppwt    : num [1:4342] 148 128 137 127 130 115 105 119 105 145 ...
-    ##  $ smoken  : num [1:4342] 0 0 1 10 1 0 0 0 0 4 ...
-    ##  $ wtgain  : num [1:4342] 29 28 11 30 26 14 21 21 41 24 ...
+#### Create my own model
+
+I will first fit MLR with these variables as predictors.
 
 ``` r
-linear_model = lm(bwt ~ bhead + blength + gaweeks + momage + ppbmi + ppwt + smoken + wtgain, data = birthweight_df)
+linear_model = lm(bwt ~ babysex + bhead + blength + gaweeks + malform + smoken + mrace + frace, data = bwt_df)
+summary(linear_model)
 ```
+
+    ## 
+    ## Call:
+    ## lm(formula = bwt ~ babysex + bhead + blength + gaweeks + malform + 
+    ##     smoken + mrace + frace, data = bwt_df)
+    ## 
+    ## Residuals:
+    ##      Min       1Q   Median       3Q      Max 
+    ## -1132.57  -188.95    -7.66   177.72  2441.50 
+    ## 
+    ## Coefficients:
+    ##                     Estimate Std. Error t value Pr(>|t|)    
+    ## (Intercept)       -5793.7494   100.4116 -57.700  < 2e-16 ***
+    ## babysexfemale        31.6777     8.6273   3.672 0.000244 ***
+    ## bhead               135.9928     3.4982  38.875  < 2e-16 ***
+    ## blength              78.7602     2.0379  38.649  < 2e-16 ***
+    ## gaweeks              12.3073     1.4841   8.293  < 2e-16 ***
+    ## malformTRUE          26.4638    72.0362   0.367 0.713362    
+    ## smoken               -4.2535     0.5968  -7.127  1.2e-12 ***
+    ## mraceblack         -177.9186    46.9074  -3.793 0.000151 ***
+    ## mraceasian         -144.4071    73.1152  -1.975 0.048324 *  
+    ## mracepuerto rican  -102.4221    45.8186  -2.235 0.025443 *  
+    ## fraceblack           40.0528    46.9495   0.853 0.393648    
+    ## fraceasian           33.2516    70.6882   0.470 0.638094    
+    ## fracepuerto rican   -38.0517    45.5399  -0.836 0.403444    
+    ## fraceother           -1.8000    75.5036  -0.024 0.980981    
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## Residual standard error: 278.2 on 4328 degrees of freedom
+    ## Multiple R-squared:  0.7058, Adjusted R-squared:  0.7049 
+    ## F-statistic: 798.7 on 13 and 4328 DF,  p-value: < 2.2e-16
+
+The results suggest that all covariates are significant predictors of
+birthweight except for `frace` and `malform`. The adjusted R-squared for
+this model is 0.7049. I will proceed with refitting the model without
+these covariates.
+
+``` r
+refitted_linear_model = lm(bwt ~ babysex + bhead + blength + gaweeks + smoken + mrace, data = bwt_df) 
+
+summary(refitted_linear_model)
+```
+
+    ## 
+    ## Call:
+    ## lm(formula = bwt ~ babysex + bhead + blength + gaweeks + smoken + 
+    ##     mrace, data = bwt_df)
+    ## 
+    ## Residuals:
+    ##      Min       1Q   Median       3Q      Max 
+    ## -1132.16  -187.84    -7.64   177.53  2439.90 
+    ## 
+    ## Coefficients:
+    ##                     Estimate Std. Error t value Pr(>|t|)    
+    ## (Intercept)       -5790.9874   100.3077 -57.732  < 2e-16 ***
+    ## babysexfemale        31.5609     8.6232   3.660 0.000255 ***
+    ## bhead               135.9807     3.4958  38.898  < 2e-16 ***
+    ## blength              78.7124     2.0366  38.648  < 2e-16 ***
+    ## gaweeks              12.3131     1.4836   8.300  < 2e-16 ***
+    ## smoken               -4.2275     0.5957  -7.097 1.48e-12 ***
+    ## mraceblack         -138.5887     9.3606 -14.806  < 2e-16 ***
+    ## mraceasian         -116.7343    42.9679  -2.717 0.006618 ** 
+    ## mracepuerto rican  -136.9243    19.0024  -7.206 6.78e-13 ***
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## Residual standard error: 278.1 on 4333 degrees of freedom
+    ## Multiple R-squared:  0.7056, Adjusted R-squared:  0.7051 
+    ## F-statistic:  1298 on 8 and 4333 DF,  p-value: < 2.2e-16
+
+The refitted model now shows an adjusted R-squared of 0.7051. This
+suggests that the refitted model does a slightly better job at
+explaining the variation in birthweight compared to the original model.
+
+I am also interested in looking at interactions between different
+covariates. I will use `ggpairs` to look at multicollinearity between
+the continuous variables in my model.
+
+``` r
+ggpairs(bwt_df[, c("bhead", "blength", "smoken", "gaweeks")])
+```
+
+![](HW6_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+
+Results from ggpairs suggest that `blength` has a moderate linear
+relationship with `bhead` (corr = 0.630), `gaweeks` has a moderately
+weak relationship with `blength` (corr = 0.359) and `bhead` (corr =
+0.378). I will fit another model that includes the three-way interaction
+between these covariates.
+
+``` r
+interaction_model = lm(bwt ~ babysex + bhead * blength * gaweeks + smoken + mrace, data = bwt_df)
+summary(interaction_model)
+```
+
+    ## 
+    ## Call:
+    ## lm(formula = bwt ~ babysex + bhead * blength * gaweeks + smoken + 
+    ##     mrace, data = bwt_df)
+    ## 
+    ## Residuals:
+    ##      Min       1Q   Median       3Q      Max 
+    ## -1112.18  -186.77    -7.88   178.90  2564.77 
+    ## 
+    ## Coefficients:
+    ##                         Estimate Std. Error t value Pr(>|t|)    
+    ## (Intercept)            1.531e+04  4.509e+03   3.395 0.000691 ***
+    ## babysexfemale          3.319e+01  8.623e+00   3.849 0.000120 ***
+    ## bhead                 -5.581e+02  1.458e+02  -3.828 0.000131 ***
+    ## blength               -4.138e+02  1.036e+02  -3.994 6.60e-05 ***
+    ## gaweeks               -4.598e+02  1.322e+02  -3.478 0.000510 ***
+    ## smoken                -4.127e+00  5.944e-01  -6.944 4.39e-12 ***
+    ## mraceblack            -1.370e+02  9.357e+00 -14.638  < 2e-16 ***
+    ## mraceasian            -1.143e+02  4.283e+01  -2.668 0.007649 ** 
+    ## mracepuerto rican     -1.397e+02  1.896e+01  -7.367 2.07e-13 ***
+    ## bhead:blength          1.597e+01  3.167e+00   5.044 4.75e-07 ***
+    ## bhead:gaweeks          1.569e+01  4.149e+00   3.781 0.000158 ***
+    ## blength:gaweeks        1.116e+01  2.900e+00   3.848 0.000121 ***
+    ## bhead:blength:gaweeks -3.647e-01  8.741e-02  -4.172 3.07e-05 ***
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## Residual standard error: 277.1 on 4329 degrees of freedom
+    ## Multiple R-squared:  0.708,  Adjusted R-squared:  0.7072 
+    ## F-statistic: 874.9 on 12 and 4329 DF,  p-value: < 2.2e-16
+
+``` r
+AIC(interaction_model)
+```
+
+    ## [1] 61179.68
+
+``` r
+AIC(refitted_linear_model)
+```
+
+    ## [1] 61207.19
+
+Results from interaction model suggest that all covariates are
+significant predictors of birthweight, and that the interactions between
+`gaweek`, `bhead` and `blength` are also significant (p-values are all
+lower than 0.05). The adjusted R-squared for this model is 0.7072, which
+suggests that this model is slightly better than the refitted linear
+model without interaction terms.
+
+I also investigated AIC values to evaluate goodness-of-fit of these two
+models, and found that the AIC value for the interaction model is
+slightly lower than that for the refitted linear model. Based on
+adjusted R-squared and AIC value, the interaction model will be my final
+model.
+
+The plot showing predictions against residuals is as follows:
 
 ``` r
 bwt_plot = 
-  birthweight_df |> 
-  add_predictions(linear_model) |> 
-  ggplot(aes(x = bhead, y = bwt)) +
+  bwt_df |> 
+  add_predictions(interaction_model) |> 
+  add_residuals(interaction_model) |> 
+  ggplot(aes(x = pred, y = resid)) +
   geom_point() +
-  geom_line(aes(y = pred))
+  geom_smooth(method = "lm", se = FALSE,  color = "red") +
+  labs(
+    title = "Residuals vs. Predicted Birth Weight", x = "Predicted Birth Weight", y = "Residuals"
+  )
 
 print(bwt_plot)
 ```
 
-![](HW6_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+![](HW6_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
+
+The residual aginst prediction plot shows that there is an overall
+random scatter pattern, but the model does a better job at explaining
+variation in birth weight for birth weight values ranging from 2500 to
+3500 grams, which is the typical birth weight for newborn babies. There
+are a few extreme data points around the range 500 to 1500, but this
+makes biological sense due to factors such as premature birth or
+maternal health conditions.
+
+#### Compare this model with other models.
+
+The first model, named `model1`, fits a MLR of `bwt` against `blength`
+and `gaweeks` as predictors. The second model, named `model2`, fits a
+MLR of `bwt` against `bhead`, `blength` and `babysex` including their
+three-way interaction.
+
+``` r
+model1 = lm(bwt ~ blength + gaweeks, data = bwt_df)
+summary(model1)
+```
+
+    ## 
+    ## Call:
+    ## lm(formula = bwt ~ blength + gaweeks, data = bwt_df)
+    ## 
+    ## Residuals:
+    ##     Min      1Q  Median      3Q     Max 
+    ## -1709.6  -215.4   -11.4   208.2  4188.8 
+    ## 
+    ## Coefficients:
+    ##              Estimate Std. Error t value Pr(>|t|)    
+    ## (Intercept) -4347.667     97.958  -44.38   <2e-16 ***
+    ## blength       128.556      1.990   64.60   <2e-16 ***
+    ## gaweeks        27.047      1.718   15.74   <2e-16 ***
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## Residual standard error: 333.2 on 4339 degrees of freedom
+    ## Multiple R-squared:  0.5769, Adjusted R-squared:  0.5767 
+    ## F-statistic:  2958 on 2 and 4339 DF,  p-value: < 2.2e-16
+
+``` r
+model2 = lm(bwt ~ bhead * blength * babysex, data = bwt_df)
+summary(model2)
+```
+
+    ## 
+    ## Call:
+    ## lm(formula = bwt ~ bhead * blength * babysex, data = bwt_df)
+    ## 
+    ## Residuals:
+    ##      Min       1Q   Median       3Q      Max 
+    ## -1132.99  -190.42   -10.33   178.63  2617.96 
+    ## 
+    ## Coefficients:
+    ##                               Estimate Std. Error t value Pr(>|t|)    
+    ## (Intercept)                 -7176.8170  1264.8397  -5.674 1.49e-08 ***
+    ## bhead                         181.7956    38.0542   4.777 1.84e-06 ***
+    ## blength                       102.1269    26.2118   3.896 9.92e-05 ***
+    ## babysexfemale                6374.8684  1677.7669   3.800 0.000147 ***
+    ## bhead:blength                  -0.5536     0.7802  -0.710 0.478012    
+    ## bhead:babysexfemale          -198.3932    51.0917  -3.883 0.000105 ***
+    ## blength:babysexfemale        -123.7729    35.1185  -3.524 0.000429 ***
+    ## bhead:blength:babysexfemale     3.8781     1.0566   3.670 0.000245 ***
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## Residual standard error: 287.7 on 4334 degrees of freedom
+    ## Multiple R-squared:  0.6849, Adjusted R-squared:  0.6844 
+    ## F-statistic:  1346 on 7 and 4334 DF,  p-value: < 2.2e-16
+
+Model 1 results show that both variables `blength` and `gaweeks` are
+significant predictors of birthweight, with both p-values being less
+than 2e-16.
+
+Model 2 results show that `bhead`, `blength` and `babysex` are all
+significant predictors of `bwt`. Based on interaction terms, those terms
+involving sex (`babysexfemale`) and the main predictors (`bhead`,
+`blength`) suggest that the effects of these variables on birthweight
+differ between male and female babies. Specifically, the three-way
+interaction (bhead:blength:babysexfemale) suggests that the effect of
+both head circumference and length at birth on birthweight is further
+modified by the baby’s sex. This indicates that the relationship between
+`bwt` and main predictors `bhead` and `blength` are not the same for
+male and female babies.
+
+I will use `crossv_mc` to make comparisons between my model and the
+other models in terms of cross-validated prediction error.
+
+``` r
+cv_df = 
+  crossv_mc(bwt_df, 100) |> 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+  )
+
+cv_results_df = 
+  cv_df |> 
+  mutate(
+    my_model = map(train, \(x) lm(bwt ~ babysex + bhead * blength * gaweeks + smoken + mrace, data = x)),
+    model1 = map(train, \(x) lm(bwt ~ blength + gaweeks, data = x)), 
+    model2 = map(train, \(x) lm(bwt ~ bhead * blength * babysex, data = x))
+  ) |> 
+  mutate(
+    rmse_my_model = map2_dbl(my_model, test, rmse),
+    rmse_model1 = map2_dbl(model1, test, rmse),
+    rmse_model2 = map2_dbl(model2, test, rmse)
+  )
+ 
+head(cv_results_df) 
+```
+
+    ## # A tibble: 6 × 9
+    ##   train    test     .id   my_model model1 model2 rmse_my_model rmse_model1
+    ##   <list>   <list>   <chr> <list>   <list> <list>         <dbl>       <dbl>
+    ## 1 <tibble> <tibble> 001   <lm>     <lm>   <lm>            266.        321.
+    ## 2 <tibble> <tibble> 002   <lm>     <lm>   <lm>            283.        333.
+    ## 3 <tibble> <tibble> 003   <lm>     <lm>   <lm>            284.        334.
+    ## 4 <tibble> <tibble> 004   <lm>     <lm>   <lm>            271.        333.
+    ## 5 <tibble> <tibble> 005   <lm>     <lm>   <lm>            276.        327.
+    ## 6 <tibble> <tibble> 006   <lm>     <lm>   <lm>            295.        351.
+    ## # ℹ 1 more variable: rmse_model2 <dbl>
