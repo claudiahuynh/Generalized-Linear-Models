@@ -1,16 +1,12 @@
 ---
-title: "HW6"
-author: "My An Huynh"
-date: "2024-11-19"
+title: "Homework 6"
 output: github_document
 ---
 
-```{r}
+```{r include = FALSE}
 library(tidyverse)
 library(p8105.datasets)
 library(modelr)
-library(mgcv)
-library(SemiPar)
 library(GGally)
 set.seed(1)
 ```
@@ -31,14 +27,6 @@ weather_df =
 ```
 
 We’ll focus on a simple linear regression with tmax as the response and tmin as the predictor, and are interested in the distribution of two quantities estimated from these data:
-
-𝑟̂ 2
-log(𝛽̂ 0∗𝛽̂ 1)
-Use 5000 bootstrap samples and, for each bootstrap sample, produce estimates of these two quantities. Plot the distribution of your estimates, and describe these in words. Using the 5000 bootstrap estimates, identify the 2.5% and 97.5% quantiles to provide a 95% confidence interval for 𝑟̂ 2
- and log(𝛽̂ 0∗𝛽̂ 1)
-. Note: broom::glance() is helpful for extracting 𝑟̂ 2
- from a fitted regression, and broom::tidy() (with some additional wrangling) should help in computing log(𝛽̂ 0∗𝛽̂ 1)
-.
 
 
 ```{r}
@@ -113,7 +101,9 @@ quantiles =
     r_squared_CI = str_c("(", round(r2_0.025, 3), ",", " ", round(r2_0.975, 3), ")"),
     log_beta_product_CI = str_c("(", round(log_beta_0.025, 3), ",", " ", round(log_beta_0.975, 3), ")")
   ) |> 
-  select(r_squared_CI, log_beta_product_CI) |> 
+  select(r_squared_CI, log_beta_product_CI) 
+
+quantiles |> 
   knitr::kable()
 
 print(quantiles)
@@ -183,15 +173,23 @@ homicide_glm =
   unnest(glm_results) |> 
   select(city_state, odds_ratio, conf_lower_95, conf_upper_95)
 
-homicide_plot = 
-  homicide_glm |> 
+homicide_glm |> 
+  knitr::kable()
+
+homicide_glm |> 
   ggplot(aes(x = reorder(city_state, odds_ratio), y = odds_ratio)) +
   geom_point() +
-  geom_errorbar(aes(ymin = conf_lower_95, ymax = conf_upper_95)) 
-
-print(homicide_plot)
+  geom_errorbar(aes(ymin = conf_lower_95, ymax = conf_upper_95)) +
+  theme(
+    axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1, size = 8)
+  ) +
+  labs(
+    title = "Odds Ratio by City with Error Bars",
+    x = "City, State",
+    y = "Odds Ratio"
+  )
 ```
-
+The plot shows that the adjusted odds ratio for solving homicides comparing male victims to female victims keeping all other variables fixed are lowest in New York, NY, Baton Rouge, LA and Omaha, NE, and are highest in Fresno, CA, Stockton, CA and Albuquerque, NM. The error bars for Fresno, Stockton and Albuquerque are also the largest, indicating more uncertainty about the true adjusted odds ratio. The error bars in Chicago, IL, Philadelphia, OA and New Orleans, LA are the smallest, indicating more certainty about the true adjusted OR. Most cities have adjusted ORs concentrated around the range 0.5 to 1, indicating little to no difference in the likelihood in solving homicides between male and female victims.
 ## Problem 3
 ```{r}
 bwt_df = 
@@ -209,9 +207,12 @@ bwt_df =
     mrace = fct_recode(
       mrace, "white" = "1", "black" = "2", "asian" = "3", 
       "puerto rican" = "4"))
+
+sum(is.na(bwt_df))
 ```
 From a biological standpoint, I hypothesize that the following factors are more likely to underly birthweight: `babysex`, `bhead`, `blength`, `gaweeks`, `malform`, `smoken`. From a socioeconomical standpoint, I hypothesize that `frace` and `mrace` may also influence birthweight, because poverty, education, and employment tend to vary across different racial and ethnic groups.
 
+Before fitting any models, I checked for NA values in the data frame. The `bwt` data frame contains 0 NA values. 
 #### Create my own model
 I will first fit MLR with these variables as predictors.
 ```{r}
@@ -257,7 +258,6 @@ bwt_plot =
   add_residuals(interaction_model) |> 
   ggplot(aes(x = pred, y = resid)) +
   geom_point() +
-  geom_smooth(method = "lm", se = FALSE,  color = "red") +
   labs(
     title = "Residuals vs. Predicted Birth Weight", x = "Predicted Birth Weight", y = "Residuals"
   )
@@ -328,3 +328,4 @@ cv_results_df |>
   )
 ```
 
+The RMSE for the simple linear model (model 1) is the highest, indicating poor model fit. The RMSE for the model 2 is lower than that for model 1, and is slightly higher than that for my proposed model. The majority of RMSE data points for model 2 are concentrated around 287, and the majority of RMSE data points for my model are concentrated around 275. Overall, I think my model does well predicting birth weights among newborns. 

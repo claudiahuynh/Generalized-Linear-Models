@@ -1,51 +1,5 @@
-HW6
+Homework 6
 ================
-My An Huynh
-2024-11-19
-
-``` r
-library(tidyverse)
-```
-
-    ## ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
-    ## ✔ dplyr     1.1.4     ✔ readr     2.1.5
-    ## ✔ forcats   1.0.0     ✔ stringr   1.5.1
-    ## ✔ ggplot2   3.5.1     ✔ tibble    3.2.1
-    ## ✔ lubridate 1.9.3     ✔ tidyr     1.3.1
-    ## ✔ purrr     1.0.2     
-    ## ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
-    ## ✖ dplyr::filter() masks stats::filter()
-    ## ✖ dplyr::lag()    masks stats::lag()
-    ## ℹ Use the conflicted package (<http://conflicted.r-lib.org/>) to force all conflicts to become errors
-
-``` r
-library(p8105.datasets)
-library(modelr)
-library(mgcv)
-```
-
-    ## Loading required package: nlme
-    ## 
-    ## Attaching package: 'nlme'
-    ## 
-    ## The following object is masked from 'package:dplyr':
-    ## 
-    ##     collapse
-    ## 
-    ## This is mgcv 1.9-1. For overview type 'help("mgcv-package")'.
-
-``` r
-library(SemiPar)
-library(GGally)
-```
-
-    ## Registered S3 method overwritten by 'GGally':
-    ##   method from   
-    ##   +.gg   ggplot2
-
-``` r
-set.seed(1)
-```
 
 ## Problem 1
 
@@ -72,14 +26,6 @@ weather_df =
 We’ll focus on a simple linear regression with tmax as the response and
 tmin as the predictor, and are interested in the distribution of two
 quantities estimated from these data:
-
-𝑟̂ 2 log(𝛽̂ 0∗𝛽̂ 1) Use 5000 bootstrap samples and, for each bootstrap
-sample, produce estimates of these two quantities. Plot the distribution
-of your estimates, and describe these in words. Using the 5000 bootstrap
-estimates, identify the 2.5% and 97.5% quantiles to provide a 95%
-confidence interval for 𝑟̂ 2 and log(𝛽̂ 0∗𝛽̂ 1) . Note: broom::glance() is
-helpful for extracting 𝑟̂ 2 from a fitted regression, and broom::tidy()
-(with some additional wrangling) should help in computing log(𝛽̂ 0∗𝛽̂ 1) .
 
 ``` r
 set.seed(1)
@@ -160,17 +106,24 @@ quantiles =
     r_squared_CI = str_c("(", round(r2_0.025, 3), ",", " ", round(r2_0.975, 3), ")"),
     log_beta_product_CI = str_c("(", round(log_beta_0.025, 3), ",", " ", round(log_beta_0.975, 3), ")")
   ) |> 
-  select(r_squared_CI, log_beta_product_CI) |> 
-  knitr::kable()
+  select(r_squared_CI, log_beta_product_CI) 
 
+quantiles |> 
+  knitr::kable()
+```
+
+| r_squared_CI   | log_beta_product_CI |
+|:---------------|:--------------------|
+| (0.893, 0.927) | (1.965, 2.059)      |
+
+``` r
 print(quantiles)
 ```
 
-    ## 
-    ## 
-    ## |r_squared_CI   |log_beta_product_CI |
-    ## |:--------------|:-------------------|
-    ## |(0.893, 0.927) |(1.965, 2.059)      |
+    ## # A tibble: 1 × 2
+    ##   r_squared_CI   log_beta_product_CI
+    ##   <chr>          <chr>              
+    ## 1 (0.893, 0.927) (1.965, 2.059)
 
 ## Problem 2
 
@@ -252,18 +205,87 @@ homicide_glm =
   unnest(glm_results) |> 
   select(city_state, odds_ratio, conf_lower_95, conf_upper_95)
 
-homicide_plot = 
-  homicide_glm |> 
-  ggplot(aes(x = reorder(city_state, odds_ratio), y = odds_ratio)) +
-  geom_point() +
-  geom_errorbar(aes(ymin = conf_lower_95, ymax = conf_upper_95)) 
-
-print(homicide_plot)
+homicide_glm |> 
+  knitr::kable()
 ```
 
-![](HW6_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+| city_state         | odds_ratio | conf_lower_95 | conf_upper_95 |
+|:-------------------|-----------:|--------------:|--------------:|
+| Albuquerque, NM    |  1.7674995 |     0.8306581 |     3.7609388 |
+| Atlanta, GA        |  1.0000771 |     0.6836012 |     1.4630669 |
+| Baltimore, MD      |  0.4255117 |     0.3245590 |     0.5578655 |
+| Baton Rouge, LA    |  0.3814393 |     0.2092532 |     0.6953103 |
+| Birmingham, AL     |  0.8700153 |     0.5742951 |     1.3180098 |
+| Boston, MA         |  0.6739912 |     0.3560002 |     1.2760222 |
+| Buffalo, NY        |  0.5205704 |     0.2897705 |     0.9352008 |
+| Charlotte, NC      |  0.8838976 |     0.5569929 |     1.4026659 |
+| Chicago, IL        |  0.4100982 |     0.3359897 |     0.5005527 |
+| Cincinnati, OH     |  0.3998277 |     0.2360847 |     0.6771390 |
+| Columbus, OH       |  0.5324845 |     0.3782581 |     0.7495933 |
+| Denver, CO         |  0.4790620 |     0.2364294 |     0.9706934 |
+| Detroit, MI        |  0.5823472 |     0.4622017 |     0.7337235 |
+| Durham, NC         |  0.8123514 |     0.3920374 |     1.6832957 |
+| Fort Worth, TX     |  0.6689803 |     0.3969391 |     1.1274643 |
+| Fresno, CA         |  1.3351647 |     0.5804995 |     3.0709150 |
+| Houston, TX        |  0.7110264 |     0.5576715 |     0.9065526 |
+| Indianapolis, IN   |  0.9187284 |     0.6794344 |     1.2423006 |
+| Jacksonville, FL   |  0.7198144 |     0.5365350 |     0.9657017 |
+| Las Vegas, NV      |  0.8373078 |     0.6076753 |     1.1537154 |
+| Long Beach, CA     |  0.4102163 |     0.1555148 |     1.0820672 |
+| Los Angeles, CA    |  0.6618816 |     0.4581299 |     0.9562510 |
+| Louisville, KY     |  0.4905546 |     0.3047208 |     0.7897189 |
+| Memphis, TN        |  0.7232194 |     0.5291729 |     0.9884224 |
+| Miami, FL          |  0.5152379 |     0.3044831 |     0.8718716 |
+| Milwaukee, wI      |  0.7271327 |     0.4987091 |     1.0601810 |
+| Minneapolis, MN    |  0.9469587 |     0.4782860 |     1.8748838 |
+| Nashville, TN      |  1.0342379 |     0.6847143 |     1.5621816 |
+| New Orleans, LA    |  0.5849373 |     0.4217648 |     0.8112381 |
+| New York, NY       |  0.2623978 |     0.1379459 |     0.4991275 |
+| Oakland, CA        |  0.5630819 |     0.3650924 |     0.8684409 |
+| Oklahoma City, OK  |  0.9740747 |     0.6240860 |     1.5203378 |
+| Omaha, NE          |  0.3824861 |     0.2029670 |     0.7207853 |
+| Philadelphia, PA   |  0.4962756 |     0.3776157 |     0.6522225 |
+| Pittsburgh, PA     |  0.4307528 |     0.2650983 |     0.6999213 |
+| Richmond, VA       |  1.0060520 |     0.4979508 |     2.0326120 |
+| San Antonio, TX    |  0.7046200 |     0.3976578 |     1.2485342 |
+| Sacramento, CA     |  0.6688418 |     0.3347138 |     1.3365132 |
+| Savannah, GA       |  0.8669817 |     0.4222665 |     1.7800544 |
+| San Bernardino, CA |  0.5003444 |     0.1712084 |     1.4622204 |
+| San Diego, CA      |  0.4130248 |     0.1995220 |     0.8549909 |
+| San Francisco, CA  |  0.6075362 |     0.3167902 |     1.1651253 |
+| St. Louis, MO      |  0.7031665 |     0.5303670 |     0.9322661 |
+| Stockton, CA       |  1.3517273 |     0.6211368 |     2.9416496 |
+| Tampa, FL          |  0.8077029 |     0.3477529 |     1.8759988 |
+| Tulsa, OK          |  0.9757694 |     0.6135882 |     1.5517343 |
+| Washington, DC     |  0.6901713 |     0.4683853 |     1.0169757 |
 
-## Problem 3
+``` r
+homicide_glm |> 
+  ggplot(aes(x = reorder(city_state, odds_ratio), y = odds_ratio)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf_lower_95, ymax = conf_upper_95)) +
+  theme(
+    axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1, size = 8)
+  ) +
+  labs(
+    title = "Odds Ratio by City with Error Bars",
+    x = "City, State",
+    y = "Odds Ratio"
+  )
+```
+
+![](HW6_files/figure-gfm/unnamed-chunk-7-1.png)<!-- --> The plot shows
+that the adjusted odds ratio for solving homicides comparing male
+victims to female victims keeping all other variables fixed are lowest
+in New York, NY, Baton Rouge, LA and Omaha, NE, and are highest in
+Fresno, CA, Stockton, CA and Albuquerque, NM. The error bars for Fresno,
+Stockton and Albuquerque are also the largest, indicating more
+uncertainty about the true adjusted odds ratio. The error bars in
+Chicago, IL, Philadelphia, OA and New Orleans, LA are the smallest,
+indicating more certainty about the true adjusted OR. Most cities have
+adjusted ORs concentrated around the range 0.5 to 1, indicating little
+to no difference in the likelihood in solving homicides between male and
+female victims. \## Problem 3
 
 ``` r
 bwt_df = 
@@ -291,6 +313,12 @@ bwt_df =
     ## ℹ Use `spec()` to retrieve the full column specification for this data.
     ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
 
+``` r
+sum(is.na(bwt_df))
+```
+
+    ## [1] 0
+
 From a biological standpoint, I hypothesize that the following factors
 are more likely to underly birthweight: `babysex`, `bhead`, `blength`,
 `gaweeks`, `malform`, `smoken`. From a socioeconomical standpoint, I
@@ -298,9 +326,9 @@ hypothesize that `frace` and `mrace` may also influence birthweight,
 because poverty, education, and employment tend to vary across different
 racial and ethnic groups.
 
-#### Create my own model
-
-I will first fit MLR with these variables as predictors.
+Before fitting any models, I checked for NA values in the data frame.
+The `bwt` data frame contains 0 NA values. \#### Create my own model I
+will first fit MLR with these variables as predictors.
 
 ``` r
 linear_model = lm(bwt ~ babysex + bhead + blength + gaweeks + malform + smoken + mrace + frace, data = bwt_df)
@@ -467,15 +495,12 @@ bwt_plot =
   add_residuals(interaction_model) |> 
   ggplot(aes(x = pred, y = resid)) +
   geom_point() +
-  geom_smooth(method = "lm", se = FALSE,  color = "red") +
   labs(
     title = "Residuals vs. Predicted Birth Weight", x = "Predicted Birth Weight", y = "Residuals"
   )
 
 print(bwt_plot)
 ```
-
-    ## `geom_smooth()` using formula = 'y ~ x'
 
 ![](HW6_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
 
@@ -611,3 +636,11 @@ cv_results_df |>
 ```
 
 ![](HW6_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
+
+The RMSE for the simple linear model (model 1) is the highest,
+indicating poor model fit. The RMSE for the model 2 is lower than that
+for model 1, and is slightly higher than that for my proposed model. The
+majority of RMSE data points for model 2 are concentrated around 287,
+and the majority of RMSE data points for my model are concentrated
+around 275. Overall, I think my model does well predicting birth weights
+among newborns.
